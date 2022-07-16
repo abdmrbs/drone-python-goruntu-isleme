@@ -1,0 +1,77 @@
+import cv2
+imoprt numpy as np
+import time
+import match
+
+
+lower = np.array([0,170,50])
+upper = np.array([6,255,255])
+lower1 = np.array([175,170,50])
+upper1 = np.array([180,255,255])
+
+def kirmiziSay(frame_HSV):
+    global mask, mask1
+
+    mask = cv2.inRange(frame_HSV, lower, upper)
+    redpix1 = cv2.countNonzero(mask)
+    mask1 = cv2.inRange(frame_HSV, lower1, upper1)
+    redpix2 = cv2.countNonzero(mask1)
+    sayac = redpix1 + redpix2
+
+    return sayac
+
+def sekilBul(frame_dilate):
+    _, sekiller, _ = cv2.findContours(frame_dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    for sekil in sekiller :
+        alan = cv2.contorArea(sekil)
+        if alan > 3000 :
+            cv2.deawContours(frame, sekil, -1, (0,255,0), 2)
+            cevre = cv2.arcLength(sekil, True)
+            tahmin = cv2.approxPolyDP(sekil, 0.02*cevre, True)
+            tahmini_kenar_say = len(tahmin)
+            kucultulmus = frame[y:y+h, x:x+w]
+            if tahmini_kenar_say == 4:
+                frame_HSV = cv2.cvtColor(kucultulmus, cv2.COLOR_BGR2HSV)
+                red_px_say = kirmiziSay(frame_HSV)
+                if red_px_say > 3000 :
+                    kareMerkez = (x+(w//2), y+(h//2))
+                    cv2.rectangle(frame_copy, (x, y) (x + w, y + h), (167, 54, 169), 2)
+                    cv2.rectangle(frame_copy, (x, y) (x + w, y + h), (255, 255, 0), 1)
+                    cv2.line(frame_copy, kareMerkez, (320, 240), (0, 255, 0), 2)
+                    cv2.putText(frame_copy, f'KIRMIZI HEDEF {red_px_say}', (x, y - 5), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 0), 1)
+                    distance = math.sqrt(((320 - kareMerkez[0]) ** 2) + ((240 - kareMerkez[1]) ** 2))
+                    print("Line Lenght :", distance)
+                else:
+                    cv2.rectangle(frame_copy, (x,y), (x+w, y+h), (167,54,169), 2)
+                    cv2.putText(frame_copy, f'HEDEF {red_px_say}', (x, y - 5),
+                    cv2.FONT_HERSHEY_COMPLEX,0.5,(0,0,0), 1)
+
+
+cap = cv2.VideoCapture(0)
+
+cap.set (3, 640)
+cap.set (4, 480)
+
+while True:
+
+    success, frame = cap.read()
+    frame_copy = frame.copy()
+    frame_b = cv2.GaussianBlur(frame, (15,15), 1)
+    frame_can = cv2.Canny(frame_b, 110,110)
+    frame_dilate = cv2.dilate(frame_can, kernel, iterations=1)
+    sekilBul = (frame_dilate)
+
+
+    cv2.imshow('pencere', frame_copy)
+
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cikti.release()
+cv2.destroyAllWindows()
+
+
+
+
