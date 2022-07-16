@@ -1,0 +1,155 @@
+from dronekit import connect, VehicleMode, LocationGlobalRelative, LocationGlobal
+import dronekit_sitl
+import math
+import time
+
+global loc_1, loc_2
+flag_1 = True
+cont_1 = True
+cont_2 = False
+cont_3 = False
+cont_4 = False
+cont_5 = False
+cont_6 = False
+
+# DRONE BAĞLANTISI
+vehicle = connect('udp:127.0.0.1:7000', wait_ready= True)
+
+
+# DRONE OTONOM UÇURMA KODLARI (SİMÜLASYON İÇNDİR)
+vehicle.mode = VehicleMode("GUIDED")
+vehicle.armed = True
+vehicle.simple_takeoff(15)
+time.sleep(2)
+vehicle.mode = VehicleMode("AUTO")
+
+
+def otonom_yonelim (loc_1, loc_2):
+ global cont_1
+ vehicle.simple_goto(loc_1)
+ print('1 e gidiliyor)
+
+ while cont_1:
+ dlat = loc_1.lat - vehicle.location.global_relative_frame.lat
+ dlong = loc_1.lon - vehicle.loaction.global_relative_frame.lon
+ fark=math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
+ print(fark)
+ if ( fark <= 0.5):
+ iha_enlem = vehicle.location.global_frame.lat
+ iha_boylam = vehicle.location.global_frame.lon
+ point1 = LocationGlobalRelative(enlem,boylam,5)
+ vehicle.simple_goto(point1)
+ print('Mavi Hedefe Gidiliyor')
+ cont_1 = False
+ cont_2 = True
+
+ while cont_2:
+ print("Hedeflenen irtifaya inildi")
+ if vehicle.global_relative_frame.alt <=6:
+ time.sleep(13)
+ iha_enlem = vehicle.location.global_frame.lat
+ iha_boylam = vehicle.location.global_frame.lon
+ point2 = LocationGlobalRelative(enlem, boylam, 10)
+ vehicle.simple_goto(point2)
+ print('İrtifa 10 metreye yükseliyor')
+ cont_2 = False
+ cont_3 = True
+
+ while cont_3:
+ print("Hedeflenen İrtifaya Çıkıldı")
+
+ if vehicle.global_relative_frame.alt >=9:
+ vehicle.simple_goto(loc_2)
+ cont_3 = False
+ cont_4 = True
+
+ while cont_4:
+ dlat = loc_2.lat - vehicle.location.global_relative_frame.lat
+ dlong = loc_2.lon - vehicle.loaction.global_relative_frame.lon
+ fark = math.sqrt((dlat * dlat) + (dlong * dlong)) * 1.113195e5
+ print(fark)
+ if (fark <= 0.5):
+ iha_enlem = vehicle.location.global_frame.lat
+ iha_boylam = vehicle.location.global_frame.lon
+ point3 = LocationGlobalRelative(enlem, boylam, 5)
+ vehicle.simple_goto(point3)
+ print('Kırmızı Hedefe Gidiliyor')
+ cont_4 = False
+ cont_5 = True
+
+ while cont_5:
+ print("Hedeflenen irtifaya inildi")
+ if vehicle.global_relative_frame.alt <= 6:
+ time.sleep(10)
+ iha_enlem = vehicle.location.global_frame.lat
+ iha_boylam = vehicle.location.global_frame.lon
+ point4 = LocationGlobalRelative(enlem, boylam, 10)
+ vehicle.simple_goto(point4)
+ print('İrtifa 10 metreye yükseliyor')
+ cont_5 = False
+ cont_6 = True
+
+
+ while cont_6:
+ print("Hedeflenen İrtifaya Çıkıldı")
+ if vehicle.global_relative_frame.alt >= 9:
+ cont_6 = False
+ vehicle.mode = VehicleMode("AUTO")
+ print("İŞLEM TAMAMLANDI")
+ time.sleep(2)
+ exit()
+
+
+while True:
+
+ mode = vehicle.mode
+ nextwaypoint = vehicle.commands.next
+ print('4. Waypoint Bekleniyor...')
+ if nextwaypoint == 4:
+ vehicle.mode = VehicleMode("GUIDED")
+ print('Otonoma alındı')
+ break
+
+
+#KAMERADAN GELEN KONUMLAR
+while True:
+
+ loc_1=dronekit.LocationGlobalRelative(39.8106953,30.5242682,15) # KONUM 1 : enlem , boylam , irtifa
+ loc_2=dronekit.LocationGlobalRelative(39.8112970,30.5249167,15) # KONUM 2 : enlem , boylam , irtifa
+
+ if flag_1 == True :
+ otonom_yonelim(loc_1, loc_2)
+ flag_1 == False
+
+
+
+
+
+
+
+
+
+
+#YORUM SATIRI
+
+#while True:
+ # iha_enlem = vehicle.location.global_frame.lat
+ # iha_boylam = vehicle.location.global_frame.lon
+ # iha_irtifa = vehicle.location.global_frame.alt
+ # iha_dikilme = vehicle.attitude.pitch
+ # iha_yönelme = vehicle.attitude.yaw
+ # iha_yatis = vehicle.attitude.roll
+ # iha_batarya = vehicle.attitude.voltage
+ # if vehicle.mode.name == 'STABILIZE' :
+# iha_otonom = 1
+ # elif vehicle.mode.name != 'STABILIZE' :
+# iha_otonom = 1
+
+ # print("%s" % iha_enlem, "%s" % iha_boylam, "%s" % iha_irtifa,
+ # "%s" % iha_dikilme, "%s" % iha_yönelme,"%s" % iha_yatis, "%s" % iha_batarya, "%s" % iha_otonom)
+
+
+
+
+ # print("Araca Baglanma: %s", % (connection_string,))
+# vehicle = connect(connection_string, wait_ready=True)
