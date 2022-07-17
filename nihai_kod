@@ -1,0 +1,284 @@
+import cv2
+import numpy as np
+import time
+import math
+import dronekit
+from dronekit import connect, VehicleMode, LocationGlobalRelative, LocationGlobal
+
+#########################################################
+
+lower2 = np.array([90,50,50])                    #MAVİ RENK
+upper2 = np.array([130,255,255])
+
+lower = np.array([0,170,50])                     #KIRMIZI RENK
+upper = np.array([6,255,255])
+lower1 = np.array([175,170,50])
+upper1 = np.array([180,255,255])
+
+kernel = np.ones((5,5), dtype=np.uint8)          #dilaete için kullanılır
+
+#########################################################
+global konumlist1,konumlist2, loc_1, loc_2
+konumlist1= [0,0]
+konumlist2= [0,0]
+flag_1 = True
+cont_1 = True
+cont_2 = False
+cont_3 = False
+cont_4 = False
+cont_5 = False
+cont_6 = False
+
+# DRONE OTONOM UÇURMA KODLARI
+print("Bağlanıyor...")
+vehicle=connect("udp:127.0.0.1:7000", wait_ready=True)
+print("Bağlandı :D")
+vehicle.mode = VehicleMode("GUIDED")
+vehicle.armed = True
+vehicle.simple_takeoff(15)            # 15 METREYE KALKIŞ YAP
+time.sleep(2)                         # 2 SANİYE BEKLE
+vehicle.mode = VehicleMode("AUTO")    # OTOMATİK MODA AL
+
+
+def kirmiziSay(frame_HSV):
+    global mask
+
+    mask = cv2.inRange(frame_HSV, lower, upper)
+    redpix1 = cv2.countNonzero(mask)
+    mask = cv2.inRange(frame_HSV, lower1, upper1)
+    redpix2 = cv2.countNonzero(mask)
+    sayac = redpix1 + redpix2
+    return sayac
+
+def maviSay(frame_HSV):
+    global mask
+
+    mask = cv2.inRange(frame_HSV, lower2, upper2)
+    sayac = cv2.countNonZero(mask)
+    return sayac
+
+
+def sekilbul(frame_can):
+
+    sekiller , hierarchy= cv2.findContours(frame_can, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    for sekil in sekiller:
+
+        alan = cv2.contourArea(sekil)
+        if alan > 3000 :
+
+            cv2.drawContours(frame, sekil, -1, (0,255,0), 2)
+            cevre = cv2.arcLength(sekil, True)
+
+            tahmin = cv2.approxPolyDP(sekil, 0.02*cevre, True)
+            tahmini_kenar_say = len(tahmin)
+            x, y, w, h = cv2.boundingRect(tahmin)
+            kucultulmus = frame[y:y+h, x:x+w]
+
+        if tahmini_kenar_say == 4:
+
+                frame_HSV = cv2.cvtColor(kucultulmus, cv2.COLOR_BGR2HSV)
+                blue_px_say = maviSay(frame_HSV)
+                red_px_say = kirmiziSay(frame_HSV)
+
+        if blue_px_say > 3000 :
+                    kareMerkez = (x+(w//2), y+(h//2))
+                    cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (167, 54, 169), 2)
+                    cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (255, 255, 0), 1)
+                    cv2.line(frame_copy, kareMerkez, (320, 240), (0, 255, 0), 2)
+                    cv2.putText(frame_copy, f'MAVI HEDEF {blue_px_say}', (x, y - 5),
+                                cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 0), 1)
+                    distance = math.sqrt(((320 - kareMerkez[0]) ** 2) + ((240 - kareMerkez[1]) ** 2))
+                    print("Line Lenght :",distance)
+        if (distance <=60):
+                        konumlist1[0]= IHA_ENLEM
+                        konumlist1[1] = IHA_BOYLAM
+
+
+
+        elif red_px_say > 3000 :
+                        kareMerkez = (x+(w//2), y+(h//2))
+                        cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (167, 54, 169), 2)
+                        cv2.rectangle(frame_copy, (x, y), (x + w, y + h), (255, 255, 0), 1)
+                        cv2.line(frame_copy, kareMerkez, (320, 240), (0, 255, 0), 2)
+                        cv2.putText(frame_copy, f'KIRMIZI HEDEF {red_px_say}', (x, y - 5),
+                                cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 0), 1)
+                        distance = math.sqrt(((320 - kareMerkez[0]) ** 2) + ((240 - kareMerkez[1]) ** 2))
+                        print("Line Lenght :",distance)
+        if (distance <=60):
+                         konumlist2[0]= IHA_ENLEM
+                         konumlist2[1] = IHA_BOYLAM
+
+        else:
+                          cv2.rectangle(frame_copy, (x,y), (x+w, y+h), (167,54,169),2)
+                          cv2.putText(frame_copy, f'HEDEF', (x,y-5),
+                                       cv2.FONT_HERSHEY_COMPLEX,0.5,(0,0,0),1)
+
+
+############################################# OTONOM YÖNELİM ###########################################
+
+
+def otonom_yonelim (loc_1, loc_2):
+    global cont_1, cont_2, cont_3, cont_4, cont_5, cont_6
+    vehicle.simple_goto(loc_1)
+    print("line 1 e gidiliyor")
+
+    while cont_1:
+        dlat = loc_1.lat - vehicle.location.global_relative_frame.lat
+        dlong = loc_1.lon - vehicle.loaction.global_relative_frame.lon
+        fark=math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
+        print(fark)
+        if ( fark <= 0.5):
+            enlem = vehicle.location.global_frame.lat
+            boylam = vehicle.location.global_frame.lon
+            point1 = LocationGlobalRelative(enlem,boylam,5)
+            vehicle.simple_goto(point1)
+            print('Mavi Hedefe Gidiliyor')
+            cont_1 = False
+            cont_2 = True
+
+        while cont_2:
+            print("Hedeflenen irtifaya inildi")
+            if vehicle.global_relative_frame.alt <=6:
+                msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 7, 1500, 0, 0, 0, 0, 0)
+                vehicle.send_mavlink(msg)
+                time.sleep(15)
+                enlem = vehicle.location.global_frame.lat
+                boylam = vehicle.location.global_frame.lon
+                point2 = LocationGlobalRelative(enlem, boylam, 10)
+                vehicle.simple_goto(point2)
+                print('İrtifa 10 metreye yükseliyor')
+                cont_2 = False
+                cont_3 = True
+
+        while cont_3:
+            print("Hedeflenen İrtifaya Çıkıldı")
+
+            if vehicle.global_relative_frame.alt >=9:
+                vehicle.simple_goto(loc_2)
+                cont_3 = False
+                cont_4 = True
+
+        while cont_4:
+            dlat = loc_2.lat - vehicle.location.global_relative_frame.lat
+            dlong = loc_2.lon - vehicle.loaction.global_relative_frame.lon
+            fark = math.sqrt((dlat * dlat) + (dlong * dlong)) * 1.113195e5
+            print(fark)
+            if (fark <= 0.5):
+                enlem = vehicle.location.global_frame.lat
+                boylam = vehicle.location.global_frame.lon
+                point3 = LocationGlobalRelative(enlem, boylam, 5)
+                vehicle.simple_goto(point3)
+                print('Kırmızı Hedefe Gidiliyor')
+                cont_4 = False
+                cont_5 = True
+
+        while cont_5:
+            print("Hedeflenen irtifaya inildi")
+            if vehicle.global_relative_frame.alt <= 6:
+                msg = vehicle.message_factory.command_long_encode(0, 0, mavutil.mavlink.MAV_CMD_DO_SET_SERVO, 0, 8, 1500, 0, 0, 0, 0, 0)
+                vehicle.send_mavlink(msg)
+                time.sleep(10)
+                enlem = vehicle.location.global_frame.lat
+                boylam = vehicle.location.global_frame.lon
+                point4 = LocationGlobalRelative(enlem, boylam, 10)
+                vehicle.simple_goto(point4)
+                print('İrtifa 10 metreye yükseliyor')
+                cont_5 = False
+                cont_6 = True
+
+
+        while cont_6:
+            print("Hedeflenen İrtifaya Çıkıldı")
+            if vehicle.global_relative_frame.alt >= 9:
+                cont_6 = False
+                vehicle.mode = VehicleMode("AUTO")
+                print("İŞLEM TAMAMLANDI")
+                time.sleep(2)
+                exit()
+
+############################################################################
+
+
+cap = cv2.VideoCapture(0)
+
+
+while True:
+    success, frame = cap.read()
+
+    frame_copy = frame.copy()
+    frame_b = cv2.GaussianBlur(frame, (15,15), 1)
+    frame_can = cv2.Canny(frame_b, 110, 110)
+    frame_dilate = cv2.dilate(frame_can, kernel, iterations=1)
+    cv2.circle(frame_copy, (320, 240), 3, (0, 255, 255), cv2.FILLED, 1)
+    IHA_ENLEM = vehicle.location.global_frame.lat
+    IHA_BOYLAM = vehicle.location.global_frame.lon
+    print("KONUMLIST1", konumlist1)
+    print("KONUMLIST2", konumlist2)
+
+############################################################
+
+    mode = vehicle.mode
+    nextwaypoint = vehicle.commands.next
+    print('4. Waypoint Bekleniyor...')
+    if nextwaypoint == 4:
+            vehicle.mode = VehicleMode("GUIDED")
+            print('Otonoma alındı')
+            break
+
+############################################################
+
+
+
+    sekilbul(frame_dilate)
+    cv2.imshow('W-1', frame_copy)
+    cv2.imshow('W-2', frame)
+
+    if cv2.waitKey(25) & 0xFF == ord('q'):
+        cv2.destroyAllWindows()
+        break
+
+
+
+while True:
+
+    success, frame = cap.read()
+    frame_copy = frame.copy()
+    frame_b = cv2.GaussianBlur(frame, (15, 15), 1)
+    frame_can = cv2.Canny(frame_b, 110, 110)
+    frame_dilate = cv2.dilate(frame_can, kernel, iterations=1)
+    sekilbul(frame_dilate)
+
+    cv2.imshow('Pencere', frame_copy)
+    cv2.imshow('Pencere', frame)
+
+    if cv2.waitKey(25) & 0xFF == ord('q'):
+        break
+
+while True:
+
+    hedef_mavi_enlem= konumlist1[0]
+    hedef_mavi_boylam = konumlist1[1]
+    loc_1=LocationGlobalRelative(hedef_mavi_enlem, hedef_mavi_boylam, 15)
+
+    hedef_kirmizi_enlem = konumlist2[0]
+    hedef_kirmizi_boylam = konumlist2[1]
+    loc_2 = LocationGlobalRelative(hedef_kirmizi_enlem, hedef_kirmizi_boylam, 15)
+
+
+    if flag_1 == True :
+        otonom_yonelim(loc_1, loc_2)
+        flag_1 == False
+
+
+
+
+
+
+
+
+#cap.release()
+#cv2.destroyAllWindows()
+
+#cap.set (3, 640)
+#cap.set (4, 480)
